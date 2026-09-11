@@ -1,0 +1,184 @@
+import { useFetchFiles } from "@/hooks/fetchFiles";
+import React, { useState } from "react";
+import { AiFillFolder } from "react-icons/ai";
+import { BsThreeDotsVertical } from "react-icons/bs";
+import { useRouter } from "next/router";
+import { useSession } from "next-auth/react";
+import { useFetchAllFiles } from "@/hooks/fetchAllFiles";
+import FileDropDown from "./FileDropDown";
+import Rename from "./Rename";
+import { useViewMode, type ViewMode } from "@/hooks/useViewMode";
+
+function GetFolders({
+  folderId,
+  select,
+  view,
+}: {
+  folderId: string;
+  select: string;
+  view?: ViewMode;
+}) {
+  const [openMenu, setOpenMenu] = useState("");
+  const [renameToggle, setRenameToggle] = useState("");
+  const [hookView] = useViewMode();
+  const mode = view ?? hookView;
+
+  const { data: session } = useSession();
+
+  const router = useRouter();
+  const userId = session?.user.id ?? "";
+  const userEmail = session?.user.email ?? undefined;
+  const { list: folderFiles } = useFetchFiles(folderId, userId, userEmail);
+  const { entries: allFiles } = useFetchAllFiles(userId, userEmail);
+  const folderList = select ? allFiles : folderFiles;
+
+  const handleMenuToggle = (fileId: string) => {
+    // Toggle the dropdown for the given file
+    setRenameToggle("");
+    setOpenMenu((prevOpenMenu) => (prevOpenMenu === fileId ? "" : fileId));
+    window.dispatchEvent(
+      new CustomEvent("drive-menu-open", {
+        detail: { fileId, source: "folders" },
+      }),
+    );
+  };
+
+  React.useEffect(() => {
+    const handleCloseOtherMenus = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        fileId: string;
+        source: string;
+      }>;
+      if (customEvent.detail?.source !== "folders") {
+        setOpenMenu("");
+        setRenameToggle("");
+      }
+    };
+
+    window.addEventListener(
+      "drive-menu-open",
+      handleCloseOtherMenus as EventListener,
+    );
+    return () => {
+      window.removeEventListener(
+        "drive-menu-open",
+        handleCloseOtherMenus as EventListener,
+      );
+    };
+  }, []);
+
+  const folders = folderList.map((folder) => {
+    // set a condition for the folders to be displayed
+    let condition = folder?.isFolder && !folder?.isTrashed;
+    if (select === "starred")
+      condition = folder?.isFolder && folder?.isStarred && !folder?.isTrashed;
+    else if (select === "trashed")
+      condition = folder?.isFolder && folder?.isTrashed;
+
+    const openFolder = () => {
+      if (select !== "trashed") {
+        void router.push("/drive/folders/" + folder.id);
+      }
+    };
+
+    const overlays = (
+      <>
+        {
+          /* drop down */
+          openMenu === folder.id && (
+            <FileDropDown
+              file={{
+                ...folder,
+                folderName: folder.folderName ?? "",
+                isFolder: folder.isFolder ?? true,
+                isStarred: folder.isStarred ?? false,
+                isTrashed: folder.isTrashed ?? false,
+                id: folder.id ?? "",
+                fileLink: folder.fileLink ?? "",
+                fileName: folder.fileName ?? "",
+                fileExtension: folder.fileExtension ?? "",
+                folderId: folder.folderId ?? "",
+              }}
+              setOpenMenu={setOpenMenu}
+              isFolderComp={true}
+              select={select}
+              folderId={folder.id}
+              setRenameToggle={setRenameToggle}
+            />
+          )
+        }
+        {
+          // rename toggle
+          renameToggle === folder.id && (
+            <Rename
+              setRenameToggle={setRenameToggle}
+              fileId={folder.id}
+              fileName={folder.folderName ?? ""}
+              isFolder={folder.isFolder ?? true}
+              fileExtension=""
+            />
+          )
+        }
+      </>
+    );
+
+    if (mode === "list") {
+      return (
+        condition && (
+          <div
+            key={folder.id}
+            onDoubleClick={openFolder}
+            className="relative flex w-full cursor-pointer items-center gap-3 rounded-xl bg-darkC2 px-3 py-2.5 hover:bg-darkC"
+            title="Double-click to open"
+          >
+            <AiFillFolder className="h-6 w-6 shrink-0" />
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-textC">
+              {folder.folderName}
+            </span>
+            <BsThreeDotsVertical
+              onClick={(event: React.MouseEvent<SVGElement>) => {
+                event.stopPropagation();
+                if (folder.id) {
+                  handleMenuToggle(folder.id);
+                }
+              }}
+              className="h-6 w-6 shrink-0 cursor-pointer rounded-full p-1 hover:bg-[#ccc]"
+            />
+            {overlays}
+          </div>
+        )
+      );
+    }
+
+    return (
+      condition && (
+        <div
+          key={folder.id}
+          onDoubleClick={openFolder}
+          className="relative flex w-[13.75rem] cursor-alias items-center justify-between rounded-xl bg-darkC2 p-3 hover:bg-darkC"
+        >
+          <div className="flex items-center space-x-2">
+            <AiFillFolder className="h-6 w-6" />
+            <span className="w-32 truncate text-sm font-medium text-textC">
+              {folder.folderName}
+            </span>
+          </div>
+          <BsThreeDotsVertical
+            onClick={(event: React.MouseEvent<SVGElement>) => {
+              event.stopPropagation();
+              if (folder.id) {
+                handleMenuToggle(folder.id);
+              }
+            }}
+            className="h-6 w-6 cursor-pointer rounded-full p-1 hover:bg-[#ccc]"
+          />
+          {overlays}
+        </div>
+      )
+    );
+  });
+
+  return folders;
+}
+
+export default GetFolders;

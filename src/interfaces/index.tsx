@@ -1,0 +1,95 @@
+interface Button {
+  btnClass: string;
+  btnText: string;
+  onClick?: () => void;
+}
+
+interface GoogleAuth {
+  clientId: string;
+  clientSecret: string;
+}
+
+interface UserInfoProps {
+  setDisplayUserInfo: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+interface folderToggleProps {
+  setFolderToggle: React.Dispatch<React.SetStateAction<boolean>>;
+  setFolderName: React.Dispatch<React.SetStateAction<string>>;
+  uploadFolder: Function;
+}
+
+interface folderToggleAndUpload {
+  uploadFile: Function;
+  uploadFolderFiles?: Function;
+  setFolderToggle: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsDropDown: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+interface PopUpProps {
+  isOpen: boolean;
+  onClose: () => void;
+  setFolderToggle: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+interface FileIcons {
+  [key: string]: React.ReactNode;
+}
+
+interface ProgressIndicatorProps {
+  uploads: UploadItem[];
+  setUploads: React.Dispatch<React.SetStateAction<UploadItem[]>>;
+}
+
+interface UploadItem {
+  id: string;
+  name: string;
+  progress: number;
+  fileLink?: string;
+}
+
+interface FileListProps {
+  folderName: string;
+  isFolder: boolean;
+  id: string;
+  fileLink: string;
+  fileName: string;
+  isStarred: boolean;
+  isTrashed: boolean;
+  fileExtension: string;
+  folderId: string;
+  userId?: string;
+  userEmail?: string;
+  publicId?: string;
+  resourceType?: string;
+  fileSize?: number;
+  isShared?: boolean;
+  shareToken?: string;
+}
+interface payloadProps {
+  folderName: string;
+  isFolder: boolean;
+  FileList: object;
+  isStarred?: boolean;
+  isTrashed?: boolean;
+  folderId?: string;
+  userId?: string;
+  userEmail?: string;
+}
+
+interface FileDropDownProps {
+  file: FileListProps;
+  folderId: string;
+  isFolderComp: boolean;
+  select: string;
+  setOpenMenu: React.Dispatch<React.SetStateAction<string>>;
+  setRenameToggle: React.Dispatch<React.SetStateAction<string>>;
+}
+
+interface renameProps {
+  fileExtension: string;
+  fileName: string;
+  fileId: string;
+  isFolder: boolean;
+  setRenameToggle: React.Dispatch<React.SetStateAction<string>>;
+}

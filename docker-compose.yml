@@ -1,0 +1,54 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wdrive-app
+    restart: unless-stopped
+    ports:
+      - "8001:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      SKIP_ENV_VALIDATION: 1
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # persist locally-uploaded files across restarts/rebuilds
+      - uploads:/app/public/google-drive-clone
+    networks:
+      - wdrive
+      - intranet_intranet
+
+  db:
+    image: postgres:15-alpine
+    container_name: wdrive-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: wdrive
+      POSTGRES_USER: wdrive
+      POSTGRES_PASSWORD: wdrive_secret
+    ports:
+      - "127.0.0.1:3309:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wdrive -d wdrive"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - wdrive
+
+volumes:
+  pgdata:
+  uploads:
+
+networks:
+  wdrive:
+    driver: bridge
+  intranet_intranet:
+    external: true
