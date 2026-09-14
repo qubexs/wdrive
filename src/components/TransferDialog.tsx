@@ -1,4 +1,5 @@
 import { useFetchAllFiles } from "@/hooks/fetchAllFiles";
+import { useSharedFiles } from "@/hooks/useSharedFiles";
 import { useSession } from "next-auth/react";
 import React, { useMemo, useState } from "react";
 
@@ -20,10 +21,14 @@ function TransferDialog({
     session?.user.id ?? "",
     session?.user.email ?? undefined,
   );
+  const { entries: allShared } = useSharedFiles();
+  const isSharedItem = (item as any).sharedDrive === true;
+  const scopeFiles = isSharedItem ? allShared : allFiles;
+  const rootLabel = isSharedItem ? "Drive" : "My Drive";
 
   const folderOptions = useMemo(() => {
     const folderMap = new Map(
-      allFiles
+      scopeFiles
         .filter((entry) => entry.isFolder)
         .map((entry) => [entry.id, entry]),
     );
@@ -35,7 +40,7 @@ function TransferDialog({
 
       while (stack.length > 0) {
         const currentId = stack.pop();
-        const children = allFiles.filter(
+        const children = scopeFiles.filter(
           (entry) => entry.folderId === currentId,
         );
 
@@ -58,18 +63,18 @@ function TransferDialog({
         pointer = folderMap.get(pointer.folderId);
       }
 
-      return `My Drive${labels.length > 0 ? ` / ${labels.join(" / ")}` : ""}`;
+      return `${rootLabel}${labels.length > 0 ? ` / ${labels.join(" / ")}` : ""}`;
     };
 
-    const options = allFiles
+    const options = scopeFiles
       .filter((entry) => entry.isFolder && !blockedIds.has(entry.id))
       .map((entry) => ({
         id: entry.id,
         label: buildPath(entry.id),
       }));
 
-    return [{ id: "", label: "My Drive" }, ...options];
-  }, [allFiles, item.folderId, item.id, item.isFolder]);
+    return [{ id: "", label: rootLabel }, ...options];
+  }, [scopeFiles, rootLabel, item.folderId, item.id, item.isFolder]);
 
   const submit = async () => {
     setIsSubmitting(true);

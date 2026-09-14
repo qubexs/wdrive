@@ -60,8 +60,13 @@ const MyApp: AppType<{ session: Session | null }> = ({
     };
   }, []);
 
-  // Public routes (share + auth)
-  const isPublic = router.pathname.startsWith("/share/") || router.pathname.startsWith("/auth/");
+  // Public routes (share + auth + legal/help)
+  const isPublic =
+    router.pathname.startsWith("/share/") ||
+    router.pathname.startsWith("/auth/") ||
+    router.pathname === "/privacy" ||
+    router.pathname === "/terms" ||
+    router.pathname === "/help";
   const isAdminRoute = router.pathname.startsWith("/admin");
   // user profile page has its own drive-style shell (like admin)
   const isProfileRoute = router.pathname === "/[userid]";

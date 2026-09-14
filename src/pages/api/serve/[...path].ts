@@ -33,13 +33,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const role = (session as any)?.user?.role;
     const canDownload = (session as any)?.user?.canDownload !== false || role === "ADMIN" || session.user.email === "demo@local.dev";
     if (!canDownload) return res.status(403).end();
-    // owners can always download own files; non-owners would have been 404 via guessing, but block cross-user guessing
-    const ownerPrefix = `google-drive-clone/${session.user.id}/`;
-    const isOwn = safe.startsWith(ownerPrefix);
-    if (!isOwn && role !== "ADMIN" && session.user.email !== "demo@local.dev") {
-      // check if file belongs to another user - deny unless admin
-      // we allow it if shared (already handled) else 403
-      return res.status(403).end();
+    // Shared Drive files are viewable by all authenticated users
+    const sharedEntry = await db.fileEntry.findFirst({
+      where: { publicId: publicIdLike, sharedDrive: true, isTrashed: false } as any,
+      select: { id: true },
+    });
+    if (sharedEntry) {
+      // fall through to file serving below
+    } else {
+      // owners can always download own files; non-owners would have been 404 via guessing, but block cross-user guessing
+      const ownerPrefix = `google-drive-clone/${session.user.id}/`;
+      const isOwn = safe.startsWith(ownerPrefix);
+      if (!isOwn && role !== "ADMIN" && session.user.email !== "demo@local.dev") {
+        // check if file belongs to another user - deny unless admin
+        // we allow it if shared (already handled) else 403
+        return res.status(403).end();
+      }
     }
   }
   if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {

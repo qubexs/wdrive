@@ -72,8 +72,8 @@ function UserInfo({ setDisplayUserInfo }: UserInfoProps) {
         </button>
       </div>
       <div className="flex h-10 items-center space-x-2 text-xs">
-        <span>Privacy policy</span>
-        <span className="-mt-[3px]"> . </span> <span>Terms of service</span>
+        <Link href="/privacy" onClick={() => setDisplayUserInfo((prev: boolean) => false)} className="hover:underline">Privacy policy</Link>
+        <span className="-mt-[3px]"> . </span> <Link href="/terms" onClick={() => setDisplayUserInfo((prev: boolean) => false)} className="hover:underline">Terms of service</Link>
       </div>
       {showPw && <ChangePasswordModal onClose={() => setShowPw(false)} />}
       {showUsers && <UserManageModal onClose={() => setShowUsers(false)} />}

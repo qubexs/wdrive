@@ -90,13 +90,15 @@ model FileEntry {
   fileSize     Int      @default(0)
   isShared     Boolean  @default(false)
   shareToken   String?  @unique
+  sharedDrive  Boolean  @default(false)
   ownerId      String
   owner        User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@unique([ownerId, folderId, isFolder, name])
+  @@unique([ownerId, folderId, isFolder, name, sharedDrive])
   @@index([ownerId, folderId])
+  @@index([sharedDrive, folderId])
   @@index([ownerId, isStarred])
   @@index([ownerId, isTrashed])
   @@index([publicId])

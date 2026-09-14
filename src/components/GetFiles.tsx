@@ -15,10 +15,14 @@ function GetFiles({
   folderId,
   select,
   view,
+  sharedEntries,
+  readOnly = false,
 }: {
   folderId: string;
   select: string;
   view?: ViewMode;
+  sharedEntries?: FileListProps[];
+  readOnly?: boolean;
 }) {
   const [openMenu, setOpenMenu] = useState("");
   const [renameToggle, setRenameToggle] = useState("");
@@ -32,7 +36,8 @@ function GetFiles({
   const userEmail = session?.user.email ?? undefined;
   const { list: folderFiles } = useFetchFiles(folderId, userId, userEmail);
   const { entries: allFiles } = useFetchAllFiles(userId, userEmail);
-  const fileList = select ? allFiles : folderFiles;
+  const privateList = select ? allFiles : folderFiles;
+  const fileList = sharedEntries ?? privateList;
 
   const openFile = (fileLink: string) => {
     window.open(fileLink, "_blank");
@@ -154,6 +159,7 @@ function GetFiles({
               select={select}
               folderId=""
               setRenameToggle={setRenameToggle}
+              readOnly={readOnly}
             />
           )
         }

@@ -26,6 +26,9 @@ export const notifyFilesChanged = () => {
 
 export const getFiles = () => request<FileListProps[]>("/api/files");
 
+export const getSharedFiles = () =>
+  request<FileListProps[]>("/api/shared-files");
+
 export const addFiles = async (
   fileLink: string,
   fileName: string,
@@ -61,18 +64,70 @@ export const addFolder = async (payload: payloadProps) => {
   return entry;
 };
 
+export const addSharedFolder = async (payload: payloadProps) => {
+  const entry = await request<FileListProps>("/api/shared-files", {
+    method: "POST",
+    body: JSON.stringify({ ...payload, isFolder: true }),
+  });
+  notifySharedChanged();
+  return entry;
+};
+
+export const addSharedFiles = async (
+  fileLink: string,
+  fileName: string,
+  folderId: string,
+  _userId: string,
+  _userEmail?: string,
+  publicId?: string,
+  resourceType?: string,
+  fileSize?: number,
+) => {
+  const entry = await request<FileListProps>("/api/shared-files", {
+    method: "POST",
+    body: JSON.stringify({
+      fileLink,
+      fileName,
+      folderId,
+      publicId,
+      resourceType,
+      fileSize,
+      isFolder: false,
+    }),
+  });
+  notifySharedChanged();
+  return entry;
+};
+
+export const notifySharedChanged = () => {
+  if (typeof window !== "undefined")
+    window.dispatchEvent(new Event("drive-shared-changed"));
+};
+
 const patchEntry = async (id: string, body: Record<string, unknown>) => {
   const entry = await request<FileListProps>(`/api/files/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
   });
   notifyFilesChanged();
+  notifySharedChanged();
   return entry;
+};
+
+const allEntries = async (): Promise<FileListProps[]> => {
+  const [own, shared] = await Promise.all([
+    getFiles().catch(() => [] as FileListProps[]),
+    getSharedFiles().catch(() => [] as FileListProps[]),
+  ]);
+  return [...own, ...shared];
 };
 
 const findConflict = (
   entries: FileListProps[],
-  entry: Pick<FileListProps, "id" | "isFolder" | "fileName" | "folderName">,
+  entry: Pick<
+    FileListProps,
+    "id" | "isFolder" | "fileName" | "folderName" | "sharedDrive"
+  >,
   destinationId: string,
 ) =>
   entries.find(
@@ -80,6 +135,8 @@ const findConflict = (
       candidate.id !== entry.id &&
       candidate.folderId === destinationId &&
       candidate.isFolder === entry.isFolder &&
+      Boolean((candidate as any).sharedDrive) ===
+        Boolean((entry as any).sharedDrive) &&
       (entry.isFolder
         ? candidate.folderName === entry.folderName
         : candidate.fileName === entry.fileName),
@@ -93,6 +150,7 @@ export const deleteFile = async (
 ) => {
   await request<void>(`/api/files/${fileId}`, { method: "DELETE" });
   notifyFilesChanged();
+  notifySharedChanged();
 };
 
 export const replaceConflictingEntry = (entry: FileListProps) =>
@@ -105,7 +163,7 @@ export const renameFile = async (
   _userId: string,
   _userEmail?: string,
 ) => {
-  const entries = await getFiles();
+  const entries = await allEntries();
   const current = entries.find((entry) => entry.id === fileId);
   if (!current) return false;
   const candidate = {
@@ -155,7 +213,7 @@ export const moveEntry = async (
   _userId: string,
   _userEmail?: string,
 ) => {
-  const entries = await getFiles();
+  const entries = await allEntries();
   const conflict = findConflict(entries, entry, destinationId);
   if (conflict) {
     const name = entry.isFolder ? entry.folderName : entry.fileName;
@@ -175,7 +233,7 @@ export const copyEntry = async (
   _userEmail?: string,
   storageLimitBytes?: number | null,
 ) => {
-  const entries = await getFiles();
+  const entries = await allEntries();
   const currentUsage = entries.reduce(
     (total, item) => total + (item.isFolder ? 0 : Number(item.fileSize ?? 0)),
     0,

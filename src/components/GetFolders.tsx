@@ -13,10 +13,16 @@ function GetFolders({
   folderId,
   select,
   view,
+  sharedEntries,
+  readOnly = false,
+  sharedMode = false,
 }: {
   folderId: string;
   select: string;
   view?: ViewMode;
+  sharedEntries?: FileListProps[];
+  readOnly?: boolean;
+  sharedMode?: boolean;
 }) {
   const [openMenu, setOpenMenu] = useState("");
   const [renameToggle, setRenameToggle] = useState("");
@@ -30,7 +36,8 @@ function GetFolders({
   const userEmail = session?.user.email ?? undefined;
   const { list: folderFiles } = useFetchFiles(folderId, userId, userEmail);
   const { entries: allFiles } = useFetchAllFiles(userId, userEmail);
-  const folderList = select ? allFiles : folderFiles;
+  const privateList = select ? allFiles : folderFiles;
+  const folderList = sharedEntries ?? privateList;
 
   const handleMenuToggle = (fileId: string) => {
     // Toggle the dropdown for the given file
@@ -77,7 +84,9 @@ function GetFolders({
 
     const openFolder = () => {
       if (select !== "trashed") {
-        void router.push("/drive/folders/" + folder.id);
+        void router.push(
+          sharedMode ? "/drive/shared/" + folder.id : "/drive/folders/" + folder.id,
+        );
       }
     };
 
@@ -104,6 +113,7 @@ function GetFolders({
               select={select}
               folderId={folder.id}
               setRenameToggle={setRenameToggle}
+              readOnly={readOnly}
             />
           )
         }

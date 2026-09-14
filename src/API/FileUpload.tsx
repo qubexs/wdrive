@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { addFiles } from "@/API/Files";
+import { addFiles, addSharedFiles } from "@/API/Files";
 
 const fileUpload = (
   file: File,
@@ -9,6 +9,7 @@ const fileUpload = (
   userId: string,
   userEmail?: string,
   fileNameOverride?: string,
+  useSharedApi = false,
 ) => {
   const upload = async () => {
     try {
@@ -69,7 +70,8 @@ const fileUpload = (
           secure_url: string;
         };
         // reuse same success path as Cloudinary
-        await addFiles(
+        const saveMeta = useSharedApi ? addSharedFiles : addFiles;
+        await saveMeta(
           localResult.secure_url,
           fileNameOverride ?? file.name,
           parentId,
@@ -126,7 +128,8 @@ const fileUpload = (
           };
 
           try {
-            await addFiles(
+            const saveMeta = useSharedApi ? addSharedFiles : addFiles;
+            await saveMeta(
               result.secure_url,
               fileNameOverride ?? file.name,
               parentId,

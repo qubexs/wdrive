@@ -4,16 +4,24 @@ import { useSession } from "next-auth/react";
 import fileUpload from "@/API/FileUpload";
 import { deleteFile, USER_STORAGE_LIMIT_BYTES } from "@/API/Files";
 import { useFetchAllFiles } from "@/hooks/fetchAllFiles";
+import { useSharedFiles } from "@/hooks/useSharedFiles";
 import { formatBytes } from "@/utils/formatBytes";
 
 type Props = {
   folderId: string;
   children: React.ReactNode;
+  readOnly?: boolean;
+  sharedMode?: boolean;
 };
 
 // Drag-and-drop file upload wrapper. Prevents the browser default
 // (opening the dropped file in a new tab) and uploads into folderId.
-export default function DropZone({ folderId, children }: Props) {
+export default function DropZone({
+  folderId,
+  children,
+  readOnly = false,
+  sharedMode = false,
+}: Props) {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? "";
   const userEmail = session?.user?.email ?? undefined;
@@ -22,6 +30,8 @@ export default function DropZone({ folderId, children }: Props) {
   const counter = useRef(0);
 
   const { entries: allFiles } = useFetchAllFiles(userId, userEmail);
+  const { entries: sharedEntries } = useSharedFiles();
+  const scopeFiles = sharedMode ? sharedEntries : allFiles;
 
   const role = (session?.user as any)?.role;
   const isAdminLike = role === "ADMIN" || session?.user?.email === "demo@local.dev";
@@ -30,13 +40,17 @@ export default function DropZone({ folderId, children }: Props) {
     (session?.user as any)?.storageLimitBytes !== undefined
       ? (session?.user as any)?.storageLimitBytes
       : USER_STORAGE_LIMIT_BYTES;
-  const currentUsageBytes = allFiles.reduce((total, entry) => {
+  const currentUsageBytes = scopeFiles.reduce((total, entry) => {
     if (entry.isFolder) return total;
     return total + Number(entry.fileSize ?? 0);
   }, 0);
 
   const handleFiles = async (files: File[]) => {
     if (!userId) return;
+    if (readOnly) {
+      window.alert("Only admin can add to shared Drive.");
+      return;
+    }
     if (!canUpload) {
       window.alert("Upload permission denied. Contact your admin.");
       return;
@@ -47,7 +61,7 @@ export default function DropZone({ folderId, children }: Props) {
       return;
     }
     for (const file of files) {
-      const conflict = allFiles.find(
+      const conflict = scopeFiles.find(
         (entry) => !entry.isFolder && entry.folderId === folderId && entry.fileName === file.name,
       );
       if (conflict) {
@@ -59,7 +73,7 @@ export default function DropZone({ folderId, children }: Props) {
         globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       setUploads((prev) => [...prev, { id: uploadId, name: file.name, progress: 0 }]);
       try {
-        await fileUpload(file, uploadId, setUploads, folderId, userId, userEmail ?? "");
+        await fileUpload(file, uploadId, setUploads, folderId, userId, userEmail ?? "", undefined, sharedMode);
         window.setTimeout(() => {
           setUploads((prev) => prev.filter((u) => u.id !== uploadId));
         }, 3000);
@@ -76,6 +90,7 @@ export default function DropZone({ folderId, children }: Props) {
       className="relative"
       onDragEnter={(e) => {
         e.preventDefault();
+        if (readOnly) return;
         if (e.dataTransfer?.types?.includes("Files")) {
           counter.current += 1;
           setDragging(true);
@@ -93,6 +108,7 @@ export default function DropZone({ folderId, children }: Props) {
         e.preventDefault();
         counter.current = 0;
         setDragging(false);
+        if (readOnly) return;
         const files = Array.from(e.dataTransfer?.files ?? []);
         if (files.length > 0) void handleFiles(files);
       }}

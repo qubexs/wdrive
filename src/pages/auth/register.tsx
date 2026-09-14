@@ -13,6 +13,7 @@ export default function Register() {
   const [icNumber, setIcNumber] = useState("");
   const [department, setDepartment] = useState("");
   const [profile, setProfile] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -27,6 +28,7 @@ export default function Register() {
     if (password.length < 4) { setMsg("Password min 4 chars"); return; }
     if (!icNumber.trim()) { setMsg("IC number is required"); return; }
     if (!department.trim()) { setMsg("Department is required"); return; }
+    if (!agreed) { setMsg("Please accept the Privacy Policy and Terms of Service"); return; }
     setLoading(true);
     try {
       const res = await fetch("/wdrive/api/auth/register", {
@@ -80,6 +82,10 @@ export default function Register() {
               <input value={icNumber} onChange={e=>setIcNumber(e.target.value)} placeholder="IC number *" className={inputCls} />
               <input value={department} onChange={e=>setDepartment(e.target.value)} placeholder="Department *" className={inputCls} />
               <textarea value={profile} onChange={e=>setProfile(e.target.value)} placeholder="Profile / job title (optional)" rows={3} className={`${inputCls} h-auto py-3`} />
+              <label className="flex cursor-pointer items-start gap-3 text-[13px] leading-5 text-[#e8eaed]">
+                <input type="checkbox" checked={agreed} onChange={e=>setAgreed(e.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-[#a8c7fa]" />
+                <span>I agree to the <Link href="/privacy" target="_blank" className="text-[#8ab4f8] hover:underline">Privacy Policy</Link> and <Link href="/terms" target="_blank" className="text-[#8ab4f8] hover:underline">Terms of Service</Link> for this internal intranet.</span>
+              </label>
               {msg && <p className="text-xs text-[#f28b82]">{msg}</p>}
               <div className="flex items-center justify-end gap-3 pt-2">
                 <Link href="/auth/signin" className="h-9 rounded-full px-6 py-2 text-sm font-medium text-[#8ab4f8] hover:bg-[#1e3a5f]/40">Sign in instead</Link>
@@ -95,6 +101,12 @@ export default function Register() {
           )}
         </div>
       </div>
+      <footer className="mx-auto flex w-full max-w-[560px] items-center justify-end px-6 py-4 text-[12px] text-[#e8eaed] md:px-0">
+        <ul className="flex gap-4 text-xs">
+          <li><Link href="/privacy" className="px-2 py-1 hover:bg-[#2d2e30] rounded">Privacy</Link></li>
+          <li><Link href="/terms" className="px-2 py-1 hover:bg-[#2d2e30] rounded">Terms</Link></li>
+        </ul>
+      </footer>
     </div>
   );
 }

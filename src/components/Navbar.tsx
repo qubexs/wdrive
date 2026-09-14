@@ -19,6 +19,15 @@ function Navbar() {
   return (
     <nav className="space-y-0.5 pr-5">
       <Link
+        href={"/drive"}
+        className={`tablet:justify-normal tablet:space-x-3 tablet:px-4 tablet:py-1.5 flex items-center justify-center rounded-full p-2 hover:bg-darkC ${
+          isActive("/drive") ? "bg-[#C2E7FF]" : ""
+        }`}
+      >
+        <DiGoogleDrive className="tablet:h-5 tablet:w-5 h-6 w-6" />
+        <span className="tablet:block hidden">Drive</span>
+      </Link>
+      <Link
         href={"/drive/my-drive"}
         className={`tablet:justify-normal tablet:space-x-3 tablet:px-4 tablet:py-1.5 flex items-center justify-center rounded-full p-2 hover:bg-darkC ${
           isActive("/drive/my-drive") ? "bg-[#C2E7FF]" : ""

@@ -30,19 +30,22 @@ function FileDropDown({
   isFolderComp,
   folderId,
   setRenameToggle,
+  readOnly = false,
 }: FileDropDownProps) {
   const router = useRouter();
   const { data: session } = useSession();
   const role = (session?.user as any)?.role;
   const isAdminLike = role === "ADMIN" || session?.user?.email === "demo@local.dev";
+  // Shared Drive: viewable by all, mutable by admin only.
+  const sharedReadOnly = (readOnly || (file as any).sharedDrive === true) && !isAdminLike;
   const su = (session?.user as any) ?? {};
   const canDownload = isAdminLike || su.canDownload !== false;
-  const canEdit = isAdminLike || su.canEdit !== false;
-  const canDelete = isAdminLike || su.canDelete === true;
-  const canRename = isAdminLike || su.canRename !== false;
-  const canMove = isAdminLike || su.canMove !== false;
-  const canCopy = isAdminLike || su.canCopy !== false;
-  const canShare = isAdminLike || su.canShare !== false;
+  const canEdit = !sharedReadOnly && (isAdminLike || su.canEdit !== false);
+  const canDelete = !sharedReadOnly && (isAdminLike || su.canDelete === true);
+  const canRename = !sharedReadOnly && (isAdminLike || su.canRename !== false);
+  const canMove = !sharedReadOnly && (isAdminLike || su.canMove !== false);
+  const canCopy = !sharedReadOnly && (isAdminLike || su.canCopy !== false);
+  const canShare = !sharedReadOnly && (isAdminLike || su.canShare !== false);
   const denied = " (no permission)";
   const deniedCls = "my-2 flex items-center space-x-3 px-3 py-1.5 text-gray-400";
   const [transferMode, setTransferMode] = React.useState<"move" | "copy" | "">(
@@ -96,7 +99,11 @@ function FileDropDown({
                 if (!isFolderComp) previewFile();
                 else {
                   closeMenu();
-                  void router.push("/drive/folders/" + folderId);
+                  const target =
+                    (file as any).sharedDrive === true
+                      ? "/drive/shared/" + folderId
+                      : "/drive/folders/" + folderId;
+                  void router.push(target);
                 }
               }}
               className="my-2 flex items-center space-x-3 px-3 py-1.5 hover:cursor-pointer hover:bg-[#ddd]"

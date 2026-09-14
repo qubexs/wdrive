@@ -18,6 +18,7 @@ export const serializeFileEntry = (entry: FileEntry) => ({
   fileSize: entry.fileSize,
   isShared: entry.isShared,
   shareToken: entry.shareToken ?? "",
+  sharedDrive: (entry as any).sharedDrive ?? false,
 });
 
 export const collectDescendantIds = (

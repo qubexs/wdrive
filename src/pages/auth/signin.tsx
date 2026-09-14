@@ -4,7 +4,7 @@ import { useRouter } from "next/router";
 import Image from "next/image";
 import Link from "next/link";
 
-/* Dark Google sign-in exactly like screenshot - view-source:accounts.google.com */
+/* Dark intranet sign-in card */
 export default function SignIn() {
   const router = useRouter();
   const callbackUrl = (router.query.callbackUrl as string) || "/drive/my-drive";
@@ -15,7 +15,7 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(err ? "Couldn't find your Google Account" : null);
+  const [msg, setMsg] = useState<string | null>(err ? "Couldn't find your account. Check your email or contact your administrator." : null);
   const [touched, setTouched] = useState(false);
 
   const emailOk = email.trim().length > 0 && (email.includes("@") ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) : email.trim().length >= 6);
@@ -115,11 +115,11 @@ export default function SignIn() {
             {step===1 ? (
               <>
                 <div className="mt-3">
-                  <Link href="#" onClick={(e)=>e.preventDefault()} className="text-sm font-medium text-[#8ab4f8] hover:underline">Forgot email?</Link>
+                  <Link href="/help#forgot-email" className="text-sm font-medium text-[#8ab4f8] hover:underline">Forgot email?</Link>
                 </div>
                 <div className="mt-10 text-[14px] leading-5 text-[#e8eaed]">
-                  <p>Not your computer? Use Guest mode to sign in privately. <Link href="https://support.google.com/chrome/answer/6130773?hl=en-US" target="_blank" className="font-medium text-[#8ab4f8] hover:underline">Learn more</Link></p>
-                  <p className="mt-1"><Link href="https://support.google.com/chrome/answer/6130773?hl=en-US" target="_blank" className="font-medium text-[#8ab4f8] hover:underline">about using Guest mode</Link></p>
+                  <p>Not your computer? Use Guest mode to sign in privately. <Link href="/help#guest-mode" className="font-medium text-[#8ab4f8] hover:underline">Learn more</Link></p>
+                  <p className="mt-1"><Link href="/help#guest-mode" className="font-medium text-[#8ab4f8] hover:underline">about using Guest mode</Link></p>
                 </div>
               </>
             ) : (
@@ -154,9 +154,9 @@ export default function SignIn() {
           <svg width="18" height="18" viewBox="0 0 24 24" className="-ml-5 pointer-events-none"><path fill="#e8eaed" d="M7 10l5 5 5-5z"/></svg>
         </div>
         <ul className="flex gap-4 text-xs">
-          <li><Link href="https://support.google.com/accounts?hl=en-US&p=account_iph" target="_blank" className="px-2 py-1 hover:bg-[#2d2e30] rounded">Help</Link></li>
-          <li><Link href="https://accounts.google.com/TOS?loc=MY&hl=en-US&privacy=true" target="_blank" className="px-2 py-1 hover:bg-[#2d2e30] rounded">Privacy</Link></li>
-          <li><Link href="https://accounts.google.com/TOS?loc=MY&hl=en-US" target="_blank" className="px-2 py-1 hover:bg-[#2d2e30] rounded">Terms</Link></li>
+          <li><Link href="/help" className="px-2 py-1 hover:bg-[#2d2e30] rounded">Help</Link></li>
+          <li><Link href="/privacy" className="px-2 py-1 hover:bg-[#2d2e30] rounded">Privacy</Link></li>
+          <li><Link href="/terms" className="px-2 py-1 hover:bg-[#2d2e30] rounded">Terms</Link></li>
         </ul>
       </footer>
     </div>

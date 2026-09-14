@@ -60,9 +60,12 @@ export const useFileEntries = (ownerId: string) => {
         .catch(() => setLoading(false));
     }
 
-    const handleChange = () => void refresh(ownerId).catch(console.error);
+    const handleChange = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      void refresh(ownerId).catch(console.error);
+    };
     window.addEventListener("drive-files-changed", handleChange);
-    const interval = window.setInterval(handleChange, 10000);
+    const interval = window.setInterval(handleChange, 60000);
 
     return () => {
       subscribers.delete(setEntries);

@@ -12,8 +12,19 @@ import { collectDescendantIds, serializeFileEntry } from "@/server/files";
 const readString = (value: unknown, maxLength = 500) =>
   typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 
-const destinationIsValid = async (ownerId: string, destinationId: string) => {
+const destinationIsValid = async (
+  ownerId: string,
+  destinationId: string,
+  sharedScope = false,
+) => {
   if (!destinationId) return true;
+  if (sharedScope) {
+    const folder = await db.fileEntry.findFirst({
+      where: { id: destinationId, isFolder: true, sharedDrive: true } as any,
+      select: { id: true },
+    });
+    return Boolean(folder);
+  }
   const folder = await db.fileEntry.findFirst({
     where: { id: destinationId, ownerId, isFolder: true },
     select: { id: true },
@@ -40,12 +51,24 @@ export default async function handler(
   const canCopy = su.canCopy !== false || isPrivileged;
   const canShare = su.canShare !== false || isPrivileged;
 
-  const entry = await db.fileEntry.findFirst({ where: { id, ownerId } });
+  const entry = await db.fileEntry.findFirst({ where: { id } });
   if (!entry) return res.status(404).json({ error: "Item not found." });
+  const isSharedEntry = (entry as any).sharedDrive === true;
+  if (isSharedEntry) {
+    // Shared Drive: viewable by all, mutable by admin only.
+    if (!isPrivileged)
+      return res.status(403).json({ error: "Only admin can modify shared Drive" });
+  } else if (entry.ownerId !== ownerId) {
+    return res.status(404).json({ error: "Item not found." });
+  }
+  // scope for descendants / delete: shared entries use sharedDrive scope
+  const scopeWhere = isSharedEntry
+    ? ({ sharedDrive: true } as any)
+    : ({ ownerId } as any);
 
   if (req.method === "DELETE") {
     if (!canDelete) return res.status(403).json({ error: "Remove permission denied" });
-    const allEntries = await db.fileEntry.findMany({ where: { ownerId } });
+    const allEntries = await db.fileEntry.findMany({ where: scopeWhere });
     const targetIds = [id];
     if (entry.isFolder) targetIds.push(...collectDescendantIds(id, allEntries));
     const targets = allEntries.filter((item) => targetIds.includes(item.id));
@@ -75,7 +98,10 @@ export default async function handler(
     }
 
     await db.fileEntry.deleteMany({
-      where: { id: { in: targetIds }, ownerId },
+      where: {
+        id: { in: targetIds },
+        ...(isSharedEntry ? { sharedDrive: true } : { ownerId }),
+      } as any,
     });
     // clean up local files on disk (best-effort)
     for (const item of targets) {
@@ -148,11 +174,11 @@ export default async function handler(
     if (action === "move") {
       if (!canMove) return res.status(403).json({ error: "Move permission denied" });
       const destinationId = readString(body.destinationId, 191);
-      if (!(await destinationIsValid(ownerId, destinationId))) {
+      if (!(await destinationIsValid(ownerId, destinationId, isSharedEntry))) {
         return res.status(400).json({ error: "Destination folder not found." });
       }
       if (entry.isFolder) {
-        const allEntries = await db.fileEntry.findMany({ where: { ownerId } });
+        const allEntries = await db.fileEntry.findMany({ where: scopeWhere });
         const descendants = new Set(collectDescendantIds(id, allEntries));
         if (destinationId === id || descendants.has(destinationId)) {
           return res
@@ -170,10 +196,10 @@ export default async function handler(
     if (action === "copy") {
       if (!canCopy) return res.status(403).json({ error: "Copy permission denied" });
       const destinationId = readString(body.destinationId, 191);
-      if (!(await destinationIsValid(ownerId, destinationId))) {
+      if (!(await destinationIsValid(ownerId, destinationId, isSharedEntry))) {
         return res.status(400).json({ error: "Destination folder not found." });
       }
-      const allEntries = await db.fileEntry.findMany({ where: { ownerId } });
+      const allEntries = await db.fileEntry.findMany({ where: scopeWhere });
       const sourceIds = entry.isFolder
         ? [id, ...collectDescendantIds(id, allEntries)]
         : [id];
@@ -216,8 +242,9 @@ export default async function handler(
               publicId: source.publicId,
               resourceType: source.resourceType,
               fileSize: source.fileSize,
-              ownerId,
-            },
+              ownerId: isSharedEntry ? source.ownerId : ownerId,
+              ...(isSharedEntry ? { sharedDrive: true } : {}),
+            } as any,
           });
           idMap.set(source.id, copy.id);
           if (source.id === id) rootCopy = copy;

@@ -65,6 +65,7 @@ interface FileListProps {
   fileSize?: number;
   isShared?: boolean;
   shareToken?: string;
+  sharedDrive?: boolean;
 }
 interface payloadProps {
   folderName: string;
@@ -84,6 +85,7 @@ interface FileDropDownProps {
   select: string;
   setOpenMenu: React.Dispatch<React.SetStateAction<string>>;
   setRenameToggle: React.Dispatch<React.SetStateAction<string>>;
+  readOnly?: boolean;
 }
 
 interface renameProps {

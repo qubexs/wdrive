@@ -25,6 +25,9 @@ function SideMenu() {
 
   const router = useRouter();
   const { Folder } = router.query;
+  const isSharedRoute =
+    router.pathname === "/drive" ||
+    router.pathname.startsWith("/drive/shared");
 
   const { data: session } = useSession();
   const userId = session?.user.id;
@@ -61,6 +64,11 @@ function SideMenu() {
 
   // Add new file
   const uploadFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (isSharedRoute) {
+      window.alert("Use + Add files inside the Drive page (admin only).");
+      e.target.value = "";
+      return;
+    }
     if (!userId) return;
     if (!requireUpload()) { e.target.value = ""; return; }
 
@@ -120,6 +128,10 @@ function SideMenu() {
 
   // Add new folder
   const uploadFolder = async () => {
+    if (isSharedRoute) {
+      window.alert("Use + New folder inside the Drive page (admin only).");
+      return false;
+    }
     if (!userId) return false;
     if (!requireUpload()) return false;
 
@@ -158,6 +170,11 @@ function SideMenu() {
   };
 
   const uploadFolderFiles = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (isSharedRoute) {
+      window.alert("Use + Add files inside the Drive page (admin only).");
+      e.target.value = "";
+      return;
+    }
     if (!userId) return;
     if (!requireUpload()) { e.target.value = ""; return; }
 

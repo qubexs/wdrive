@@ -12,16 +12,24 @@ type BreadcrumbItem = {
 function FileHeader({
   headerName,
   breadcrumbs,
+  rootHref = "/drive/my-drive",
+  rootLabel,
+  sharedMode = false,
 }: {
   headerName: string;
   breadcrumbs?: BreadcrumbItem[];
+  rootHref?: string;
+  rootLabel?: string;
+  sharedMode?: boolean;
 }) {
   const router = useRouter();
-  const isNestedFolder = router.route === "/drive/[...Folder]";
+  const isNestedFolder =
+    router.route === "/drive/[...Folder]" ||
+    router.route === "/drive/shared/[folderId]";
   const breadcrumbTrail =
     breadcrumbs && breadcrumbs.length > 0
       ? breadcrumbs
-      : [{ id: "", label: headerName }];
+      : [{ id: "", label: rootLabel ?? headerName }];
 
   return (
     <div className="flex flex-col space-y-6 p-5 pb-2">
@@ -35,7 +43,11 @@ function FileHeader({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           {breadcrumbTrail.map((item, index) => {
             const isLast = index === breadcrumbTrail.length - 1;
-            const route = item.id ? `/drive/folders/${item.id}` : "/drive/my-drive";
+            const route = item.id
+              ? sharedMode
+                ? `/drive/shared/${item.id}`
+                : `/drive/folders/${item.id}`
+              : rootHref;
 
             return (
               <React.Fragment key={`${item.id}-${item.label}`}>
