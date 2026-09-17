@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/router";
 import Image from "next/image";
@@ -9,6 +9,7 @@ export default function SignIn() {
   const router = useRouter();
   const callbackUrl = (router.query.callbackUrl as string) || "/drive/my-drive";
   const err = router.query.error as string | undefined;
+  const reason = router.query.reason as string | undefined;
 
   const [step, setStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState("");
@@ -17,6 +18,13 @@ export default function SignIn() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(err ? "Couldn't find your account. Check your email or contact your administrator." : null);
   const [touched, setTouched] = useState(false);
+
+  // Show a friendly notice after a forced 24h logout (?reason=expired)
+  useEffect(() => {
+    if (reason === "expired") {
+      setMsg("Session expired after 24 hours. Please sign in again.");
+    }
+  }, [reason]);
 
   const emailOk = email.trim().length > 0 && (email.includes("@") ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) : email.trim().length >= 6);
   const pwOk = password.length >= 1;

@@ -1,5 +1,5 @@
 import { type Session } from "next-auth";
-import { SessionProvider, signIn, useSession } from "next-auth/react";
+import { SessionProvider, signIn, signOut, useSession } from "next-auth/react";
 import { type AppType } from "next/app";
 import { type ReactNode, useEffect } from "react";
 import { useRouter } from "next/router";
@@ -10,7 +10,7 @@ import SideMenu from "@/components/SideMenu";
 
 function AuthGate({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const { status } = useSession({
+  const { data: session, status } = useSession({
     required: true,
     onUnauthenticated() {
       const callbackUrl =
@@ -20,6 +20,23 @@ function AuthGate({ children }: { children: ReactNode }) {
       });
     },
   });
+
+  // Force logout the moment the 24h session expires, even with the tab open.
+  // NextAuth gives session.expires = login time + 24h (see SESSION_MAX_AGE_SECONDS).
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    const expiresAt = session?.expires ? new Date(session.expires).getTime() : NaN;
+    if (Number.isNaN(expiresAt)) return;
+    const msLeft = expiresAt - Date.now();
+    if (msLeft <= 0) {
+      void signOut({ callbackUrl: "/wdrive/auth/signin?reason=expired" });
+      return;
+    }
+    const t = setTimeout(() => {
+      void signOut({ callbackUrl: "/wdrive/auth/signin?reason=expired" });
+    }, msLeft + 1000);
+    return () => clearTimeout(t);
+  }, [status, session?.expires]);
 
   if (status !== "authenticated") {
     return (
@@ -74,7 +91,7 @@ const MyApp: AppType<{ session: Session | null }> = ({
 
   if (isAdminRoute || isProfileRoute) {
     return (
-      <SessionProvider session={session} basePath="/wdrive/api/auth">
+      <SessionProvider session={session} basePath="/wdrive/api/auth" refetchInterval={5 * 60} refetchOnWindowFocus>
         <Head>
           <title>My Drive - WDrive Intranet</title>
           <link rel="icon" href="/wdrive/favicon.ico" sizes="any" />
@@ -94,7 +111,7 @@ const MyApp: AppType<{ session: Session | null }> = ({
   // Public layout - no AuthGate, centered
   if (isPublic) {
     return (
-      <SessionProvider session={session} basePath="/wdrive/api/auth">
+      <SessionProvider session={session} basePath="/wdrive/api/auth" refetchInterval={5 * 60} refetchOnWindowFocus>
         <Head>
           <title>My Drive - WDrive Intranet</title>
           <link rel="icon" href="/wdrive/favicon.ico" sizes="any" />
@@ -111,7 +128,7 @@ const MyApp: AppType<{ session: Session | null }> = ({
 
   // Protected app
   return (
-    <SessionProvider session={session} basePath="/wdrive/api/auth">
+    <SessionProvider session={session} basePath="/wdrive/api/auth" refetchInterval={5 * 60} refetchOnWindowFocus>
       <Head>
         <title>My Drive - WDrive Intranet</title>
         <link rel="icon" href="/wdrive/favicon.ico" sizes="any" />

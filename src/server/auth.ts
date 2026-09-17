@@ -13,6 +13,9 @@ import { env } from "@/env.mjs";
 import { db } from "@/server/db";
 import { USER_STORAGE_LIMIT_BYTES } from "@/constants/storage";
 
+/** Absolute login lifetime: 24h from last successful sign-in. */
+export const SESSION_MAX_AGE_SECONDS = 24 * 60 * 60;
+
 /**
  * Module augmentation for `next-auth` types. Allows us to add custom properties to the `session`
  * object and keep type safety.
@@ -63,6 +66,8 @@ declare module "next-auth/jwt" {
     canShare?: boolean;
     isActive?: boolean;
     storageLimitBytes?: number | null;
+    /** Unix seconds of the successful sign-in this token was issued for. */
+    loginAt?: number;
   }
 }
 
@@ -104,6 +109,7 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
     jwt: async ({ token, user }) => {
+      const nowSec = Math.floor(Date.now() / 1000);
       if (user) {
         token.sub = user.id;
         (token as any).role = (user as any).role;
@@ -118,7 +124,24 @@ export const authOptions: NextAuthOptions = {
         (token as any).isActive = (user as any).isActive;
         (token as any).image = (user as any).image ?? null;
         (token as any).storageLimitBytes = (user as any).storageLimitBytes !== undefined ? (user as any).storageLimitBytes : USER_STORAGE_LIMIT_BYTES;
-      } else if (token?.sub) {
+        // fresh sign-in starts a new 24h window
+        (token as any).loginAt = nowSec;
+        return token;
+      }
+      if (token?.sub) {
+        // Absolute 24h lifetime from last sign-in (covers idle + active).
+        // Old tokens issued before loginAt existed fall back to iat.
+        const loginAt =
+          (token as any).loginAt ??
+          (token as any).iat ??
+          nowSec;
+        // backfill so subsequent checks have an explicit value
+        (token as any).loginAt = loginAt;
+        if (nowSec - loginAt > SESSION_MAX_AGE_SECONDS) {
+          // Returning null forces NextAuth to treat the session as expired
+          // and the client AuthGate redirects to sign-in.
+          return null as unknown as typeof token;
+        }
         // refresh perms from DB so admin changes apply without re-login
         try {
           const dbUser = await db.user.findUnique({
@@ -149,8 +172,11 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
   },
-  // Use JWT for credentials so DB sessions are not required
-  session: { strategy: "jwt" },
+  // Use JWT for credentials so DB sessions are not required.
+  // 24h absolute lifetime: cookie/JWT exp + explicit loginAt check above.
+  // updateAge = maxAge so an active user does NOT silently extend past 24h.
+  session: { strategy: "jwt", maxAge: SESSION_MAX_AGE_SECONDS, updateAge: SESSION_MAX_AGE_SECONDS },
+  jwt: { maxAge: SESSION_MAX_AGE_SECONDS },
   pages: { signIn: "/wdrive/auth/signin" },
   adapter: PrismaAdapter(db),
   providers: [
