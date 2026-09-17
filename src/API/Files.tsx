@@ -272,3 +272,31 @@ export const copyEntry = async (
   }
   await patchEntry(entry.id, { action: "copy", destinationId });
 };
+
+// Admin-only: move a My Drive file/folder into shared Drive.
+// The server enforces admin rights (403 for non-admins).
+export const moveToShared = async (
+  entry: FileListProps,
+  destinationId: string,
+) => {
+  const entries = await allEntries();
+  const name = entry.isFolder ? entry.folderName : entry.fileName;
+  const conflict = entries.find(
+    (candidate) =>
+      candidate.id !== entry.id &&
+      candidate.folderId === destinationId &&
+      candidate.isFolder === entry.isFolder &&
+      Boolean((candidate as any).sharedDrive) === true &&
+      (entry.isFolder
+        ? candidate.folderName === name
+        : candidate.fileName === name),
+  );
+  if (conflict) {
+    const confirmed = window.confirm(
+      `"${name}" already exists in shared Drive here. Replace it?`,
+    );
+    if (!confirmed) return;
+    await replaceConflictingEntry(conflict);
+  }
+  await patchEntry(entry.id, { action: "moveToShared", destinationId });
+};

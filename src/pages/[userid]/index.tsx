@@ -6,6 +6,7 @@ import { MdLock, MdPerson } from "react-icons/md";
 import Header from "@/components/headerComponents/Header";
 import UserAvatar from "@/components/UserAvatar";
 import { ChangePasswordModal } from "@/components/PasswordModal";
+import DepartmentCombobox, { type DepartmentOption } from "@/components/DepartmentCombobox";
 
 type Section = "profile" | "security";
 
@@ -16,6 +17,7 @@ type ProfileData = {
   image: string | null;
   role?: string;
   department: string | null;
+  departmentId?: string | null;
   profile?: string | null;
   icNumber?: string | null;
 };
@@ -37,7 +39,7 @@ export default function UserProfilePage() {
 
   // edit drafts
   const [name, setName] = useState("");
-  const [department, setDepartment] = useState("");
+  const [department, setDepartment] = useState<DepartmentOption | null>(null);
   const [profile, setProfile] = useState("");
 
   const load = async (id: string) => {
@@ -49,7 +51,7 @@ export default function UserProfilePage() {
       if (!res.ok) { setMsg(j.error || "Failed to load profile"); setData(null); return; }
       setData(j);
       setName(j.name ?? "");
-      setDepartment(j.department ?? "");
+      setDepartment(j.department ? { id: j.departmentId ?? j.department, name: j.department } : null);
       setProfile(j.profile ?? "");
     } catch (e: any) {
       setMsg(String(e.message || e));
@@ -68,12 +70,13 @@ export default function UserProfilePage() {
     if (!isSelf) return;
     setMsg(null);
     if (!name.trim()) { setMsg("Name required"); return; }
+    if (!department) { setMsg("Please select a department from the list"); return; }
     setSaving(true);
     try {
       const res = await fetch(`/wdrive/api/user/profile?userId=${targetId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, department, profile }),
+        body: JSON.stringify({ name, departmentId: department.id, department: department.name, profile }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg(j.error || "Save failed"); return; }
@@ -210,7 +213,11 @@ export default function UserProfilePage() {
                         </div>
                         <div>
                           <label className="text-xs text-gray-500">Department</label>
-                          <input value={department} onChange={e=>setDepartment(e.target.value)} disabled={!isSelf} placeholder="—" className={inputCls} />
+                          {isSelf ? (
+                            <DepartmentCombobox value={department} onChange={setDepartment} required placeholder="Type to search department / unit…" />
+                          ) : (
+                            <input value={data.department ?? "—"} disabled className={inputCls} />
+                          )}
                         </div>
                         <div>
                           <label className="text-xs text-gray-500">Profile</label>

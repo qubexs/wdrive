@@ -83,7 +83,7 @@ export default function SharedDrive() {
       <Head>
         <title>Drive - Shared files</title>
         <meta name="description" content="Shared Drive visible to all users" />
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/wdrive/favicon.ico" />
       </Head>
       <div>
         <FileHeader

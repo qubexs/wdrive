@@ -14,6 +14,7 @@ import { TbDownload } from "react-icons/tb";
 import {
   deleteFile,
   moveEntry,
+  moveToShared,
   copyEntry,
   starFile,
   trashFile,
@@ -48,9 +49,10 @@ function FileDropDown({
   const canShare = !sharedReadOnly && (isAdminLike || su.canShare !== false);
   const denied = " (no permission)";
   const deniedCls = "my-2 flex items-center space-x-3 px-3 py-1.5 text-gray-400";
-  const [transferMode, setTransferMode] = React.useState<"move" | "copy" | "">(
-    "",
-  );
+  const [transferMode, setTransferMode] = React.useState<
+    "move" | "copy" | "moveToShared" | ""
+  >("");
+  const isMyDriveItem = (file as any).sharedDrive !== true;
   const [shareOpen, setShareOpen] = React.useState(false);
   const closeMenu = () => setOpenMenu("");
 
@@ -213,6 +215,21 @@ function FileDropDown({
                 <span className="text-sm">Make a copy to{denied}</span>
               </div>
             )}
+            {isMyDriveItem && isAdminLike && (
+              <div
+                onClick={() => setTransferMode("moveToShared")}
+                className="my-2 flex items-center space-x-3 px-3 py-1.5 hover:cursor-pointer hover:bg-[#ddd]"
+              >
+                <MdDriveFileMove className="h-5 w-5" />
+                <span className="text-sm">Move to Drive</span>
+              </div>
+            )}
+            {isMyDriveItem && !isAdminLike && (
+              <div className={deniedCls} title="Only admin can move My Drive items to shared Drive">
+                <MdDriveFileMove className="h-5 w-5" />
+                <span className="text-sm">Move to Drive (admin only)</span>
+              </div>
+            )}
             {!isFolderComp && canShare && (
               <div
                 onClick={() => {
@@ -290,6 +307,7 @@ function FileDropDown({
         <TransferDialog
           item={file}
           mode={transferMode}
+          targetScope={transferMode === "moveToShared" ? "shared" : undefined}
           onClose={() => {
             setTransferMode("");
             closeMenu();
@@ -302,6 +320,10 @@ function FileDropDown({
                 session.user.id,
                 session.user.email ?? undefined,
               );
+              return;
+            }
+            if (transferMode === "moveToShared") {
+              await moveToShared(file, destinationId);
               return;
             }
 

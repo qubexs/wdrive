@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useRouter } from "next/router";
 import Image from "next/image";
 import Link from "next/link";
+import DepartmentCombobox, { type DepartmentOption } from "@/components/DepartmentCombobox";
 
 /* Dark sign-up matching the sign-in card */
 export default function Register() {
@@ -11,7 +12,7 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [icNumber, setIcNumber] = useState("");
-  const [department, setDepartment] = useState("");
+  const [department, setDepartment] = useState<DepartmentOption | null>(null);
   const [profile, setProfile] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -27,14 +28,14 @@ export default function Register() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setMsg("Enter a valid email"); return; }
     if (password.length < 4) { setMsg("Password min 4 chars"); return; }
     if (!icNumber.trim()) { setMsg("IC number is required"); return; }
-    if (!department.trim()) { setMsg("Department is required"); return; }
+    if (!department) { setMsg("Please select a department from the list"); return; }
     if (!agreed) { setMsg("Please accept the Privacy Policy and Terms of Service"); return; }
     setLoading(true);
     try {
       const res = await fetch("/wdrive/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, icNumber, department, profile }),
+        body: JSON.stringify({ name, email, password, icNumber, departmentId: department.id, department: department.name, profile }),
       });
       const j = await res.json().catch(() => ({})) as any;
       if (!res.ok) { setMsg(j.error || "Registration failed"); return; }
@@ -80,7 +81,7 @@ export default function Register() {
                 <button type="button" onClick={()=>setShowPw(v=>!v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8ab4f8]">{showPw?"Hide":"Show"}</button>
               </div>
               <input value={icNumber} onChange={e=>setIcNumber(e.target.value)} placeholder="IC number *" className={inputCls} />
-              <input value={department} onChange={e=>setDepartment(e.target.value)} placeholder="Department *" className={inputCls} />
+              <DepartmentCombobox value={department} onChange={setDepartment} required dark placeholder="Department / Unit * — type to search…" />
               <textarea value={profile} onChange={e=>setProfile(e.target.value)} placeholder="Profile / job title (optional)" rows={3} className={`${inputCls} h-auto py-3`} />
               <label className="flex cursor-pointer items-start gap-3 text-[13px] leading-5 text-[#e8eaed]">
                 <input type="checkbox" checked={agreed} onChange={e=>setAgreed(e.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-[#a8c7fa]" />

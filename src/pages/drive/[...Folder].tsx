@@ -80,7 +80,7 @@ function Folder() {
       <Head>
         <title>{`${headerName} - Google Drive`}</title>
         <meta name="description" content="This is a google drive clone!" />
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/wdrive/favicon.ico" />
       </Head>
       <div>
         <FileHeader headerName={headerName} breadcrumbs={breadcrumbs} />

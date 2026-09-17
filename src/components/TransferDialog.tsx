@@ -8,14 +8,19 @@ function TransferDialog({
   mode,
   onClose,
   onConfirm,
+  targetScope,
 }: {
   item: FileListProps;
-  mode: "move" | "copy";
+  mode: "move" | "copy" | "moveToShared";
   onClose: () => void;
   onConfirm: (destinationId: string) => Promise<void>;
+  // when "shared", list shared-Drive folders regardless of the item's scope
+  targetScope?: "shared";
 }) {
   const { data: session } = useSession();
-  const [destinationId, setDestinationId] = useState(item.folderId || "");
+  const [destinationId, setDestinationId] = useState(
+    targetScope === "shared" ? "" : item.folderId || "",
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { entries: allFiles } = useFetchAllFiles(
     session?.user.id ?? "",
@@ -23,8 +28,9 @@ function TransferDialog({
   );
   const { entries: allShared } = useSharedFiles();
   const isSharedItem = (item as any).sharedDrive === true;
-  const scopeFiles = isSharedItem ? allShared : allFiles;
-  const rootLabel = isSharedItem ? "Drive" : "My Drive";
+  const crossScope = targetScope === "shared" && !isSharedItem;
+  const scopeFiles = targetScope === "shared" ? allShared : isSharedItem ? allShared : allFiles;
+  const rootLabel = targetScope === "shared" || isSharedItem ? "Drive" : "My Drive";
 
   const folderOptions = useMemo(() => {
     const folderMap = new Map(
@@ -96,9 +102,9 @@ function TransferDialog({
         className="w-[28rem] space-y-5 rounded-xl bg-white p-5 shadow-lg shadow-[#bbb]"
       >
         <div className="space-y-1">
-          <h2 className="text-2xl capitalize">{mode} item</h2>
+          <h2 className="text-2xl capitalize">{mode === "moveToShared" ? "Move to Drive" : `${mode} item`}</h2>
           <p className="text-sm text-textC">
-            Select where to {mode} "
+            Select where {crossScope ? "in shared Drive " : ""}to {mode === "moveToShared" ? "move" : mode} "
             {item.isFolder ? item.folderName : item.fileName}".
           </p>
         </div>
@@ -127,7 +133,7 @@ function TransferDialog({
             disabled={isSubmitting}
             className="rounded-full px-3 py-2 hover:bg-darkC2 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting ? "Working..." : mode === "move" ? "Move" : "Copy"}
+            {isSubmitting ? "Working..." : mode === "copy" ? "Copy" : mode === "moveToShared" ? "Move to Drive" : "Move"}
           </button>
         </div>
       </div>

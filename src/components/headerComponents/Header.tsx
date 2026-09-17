@@ -4,12 +4,14 @@ import Image from "next/image";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import UserInfo from "./UserInfo";
+import AppLauncher from "./AppLauncher";
 import Link from "next/link";
 import Search from "./Search";
 import UserAvatar from "@/components/UserAvatar";
 
 function Header() {
   const [displayUserInfo, setDisplayUserInfo] = useState(false);
+  const [displayApps, setDisplayApps] = useState(false);
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -32,22 +34,33 @@ function Header() {
       </div>
       {/* search */}
       <Search />
-      <div
-        onClick={() => {
-          if (status === "authenticated") {
-            setDisplayUserInfo((prev) => !prev);
-            return;
-          }
-
-          void signIn();
-        }}
-        className="ml-3 h-8 w-8 cursor-pointer overflow-hidden rounded-full"
-      >
-        <UserAvatar
-          name={session?.user?.name}
-          email={session?.user?.email}
-          image={session?.user?.image}
+      <div className="flex items-center gap-1">
+        <AppLauncher
+          open={displayApps}
+          onToggle={() => {
+            setDisplayApps((prev) => !prev);
+            setDisplayUserInfo(false);
+          }}
+          onClose={() => setDisplayApps(false)}
         />
+        <div
+          onClick={() => {
+            if (status === "authenticated") {
+              setDisplayUserInfo((prev) => !prev);
+              setDisplayApps(false);
+              return;
+            }
+
+            void signIn();
+          }}
+          className="h-8 w-8 cursor-pointer overflow-hidden rounded-full"
+        >
+          <UserAvatar
+            name={session?.user?.name}
+            email={session?.user?.email}
+            image={session?.user?.image}
+          />
+        </div>
       </div>
       <div className="absolute right-5 top-16">
         {session && displayUserInfo && (

@@ -11,12 +11,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { email, password, name, icNumber, department, profile } = (req.body ?? {}) as {
+  const { email, password, name, icNumber, department, departmentId, profile } = (req.body ?? {}) as {
     email?: string;
     password?: string;
     name?: string;
     icNumber?: string;
     department?: string;
+    departmentId?: string;
     profile?: string;
   };
 
@@ -29,8 +30,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: "Name is required" });
   if (!(icNumber ?? "").trim())
     return res.status(400).json({ error: "IC number is required" });
-  if (!(department ?? "").trim())
+  // Department must be a valid active department (autocomplete selection).
+  // Accept departmentId (preferred) or legacy department name for compatibility.
+  let dept: any = null;
+  if (departmentId) {
+    dept = await (db as any).department.findFirst({ where: { id: departmentId, isActive: true } });
+    if (!dept) return res.status(400).json({ error: "Please select a valid department from the list" });
+  } else if ((department ?? "").trim()) {
+    const n = (department ?? "").trim().replace(/\s+/g, " ");
+    dept = await (db as any).department.findFirst({ where: { name: { equals: n, mode: "insensitive" }, isActive: true } });
+    if (!dept) return res.status(400).json({ error: "Please select a valid department from the list" });
+  } else {
     return res.status(400).json({ error: "Department is required" });
+  }
 
   // exact domain match against active allowlist
   const domain = e.split("@")[1] ?? "";
@@ -54,7 +66,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       isActive: false,
       isApproved: false,
       icNumber: (icNumber ?? "").trim().slice(0, 50),
-      department: (department ?? "").trim().slice(0, 100),
+      department: dept.name,
+      departmentId: dept.id,
       profile: (profile ?? "").trim().slice(0, 500),
     },
   });

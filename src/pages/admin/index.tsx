@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { MdDashboard, MdDomain, MdPendingActions, MdPeople } from "react-icons/md";
+import { MdBusiness, MdDashboard, MdDomain, MdPendingActions, MdPeople } from "react-icons/md";
 import Header from "@/components/headerComponents/Header";
+import DepartmentCombobox, { type DepartmentOption } from "@/components/DepartmentCombobox";
 
 type AdminUser = {
   id: string;
@@ -20,7 +21,8 @@ type AdminUser = {
   canShare: boolean;
   isActive: boolean;
   icNumber?: string;
-  department?: string;
+  department?: string | null;
+  departmentId?: string | null;
   profile?: string;
   requestedAt?: string;
   isApproved?: boolean;
@@ -36,7 +38,15 @@ type DomainRow = {
   createdAt: string;
 };
 
-type Section = "overview" | "pending" | "users" | "domains";
+type DepartmentRow = {
+  id: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+  memberCount: number;
+};
+
+type Section = "overview" | "pending" | "users" | "domains" | "departments";
 
 const PERM_DEFS: { key: keyof AdminUser; label: string; hint: string }[] = [
   { key: "canUpload", label: "upload", hint: "Create folders, upload files" },
@@ -79,24 +89,40 @@ export default function AdminPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [domains, setDomains] = useState<DomainRow[]>([]);
   const [newDomain, setNewDomain] = useState("");
+  const [departments, setDepartments] = useState<DepartmentRow[]>([]);
+  const [newDept, setNewDept] = useState("");
+  const [deptRename, setDeptRename] = useState<Record<string, string>>({});
+  const [deptReassign, setDeptReassign] = useState<Record<string, string>>({});
+  const [newUserDept, setNewUserDept] = useState<DepartmentOption | null>(null);
+  // admin edit-user-profile modal
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editIc, setEditIc] = useState("");
+  const [editProfile, setEditProfile] = useState("");
+  const [editDept, setEditDept] = useState<DepartmentOption | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   const pending = users.filter(u => !u.isActive && !u.isApproved);
   const [section, setSection] = useState<Section>("overview");
   const [userQuery, setUserQuery] = useState("");
-  const [deptFilter, setDeptFilter] = useState("all");
+  const [deptFilter, setDeptFilter] = useState<DepartmentOption | null>(null);
   const [quotaDrafts, setQuotaDrafts] = useState<Record<string, string>>({});
   const [quotaUnlimited, setQuotaUnlimited] = useState<Record<string, boolean>>({});
   const [newQuotaMB, setNewQuotaMB] = useState("200");
   const [newQuotaUnlimited, setNewQuotaUnlimited] = useState(false);
 
-  const deptOptions = useMemo(
-    () => [...new Set(users.map(u => (u.department ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
-    [users],
+  const deptOptions: DepartmentOption[] = useMemo(
+    () => departments.map(d => ({ id: d.id, name: d.name + (d.isActive ? "" : " (inactive)") })),
+    [departments],
+  );
+  const deptOptionsActive: DepartmentOption[] = useMemo(
+    () => departments.filter(d => d.isActive).map(d => ({ id: d.id, name: d.name })),
+    [departments],
   );
   const visibleUsers = users.filter(u => {
     const q = userQuery.trim().toLowerCase();
     const matchQ = !q || [u.name, u.email, u.department].some(v => (v ?? "").toLowerCase().includes(q));
-    const matchD = deptFilter === "all" || (u.department ?? "") === deptFilter;
+    const matchD = !deptFilter || (u.departmentId ?? "") === deptFilter.id;
     return matchQ && matchD;
   });
 
@@ -113,16 +139,19 @@ export default function AdminPage() {
 
   const load = async () => {
     setLoading(true);
-    const [uRes, sRes, dRes] = await Promise.all([
+    const [uRes, sRes, dRes, depRes] = await Promise.all([
       fetch("/wdrive/api/admin/users"),
       fetch("/wdrive/api/admin/stats"),
       fetch("/wdrive/api/admin/domains"),
+      fetch("/wdrive/api/admin/departments"),
     ]);
     if (uRes.ok) setUsers(await uRes.json());
     else setMsg(`Users: ${uRes.status} ${await uRes.text()}`);
     if (sRes.ok) setStats(await sRes.json());
     if (dRes.ok) setDomains(await dRes.json());
     else setMsg(`Domains: ${dRes.status} ${await dRes.text()}`);
+    if (depRes.ok) setDepartments(await depRes.json());
+    else setMsg(`Departments: ${depRes.status} ${await depRes.text()}`);
     setLoading(false);
   };
 
@@ -145,12 +174,13 @@ export default function AdminPage() {
         password: newPassword,
         role: newRole,
         ...newPerms,
+        departmentId: newUserDept?.id,
         storageLimitBytes: newQuotaUnlimited ? null : Math.floor(quotaMB * 1024 * 1024),
       }),
     });
     const j = await res.json().catch(() => ({})) as any;
     if (!res.ok) { setMsg(j.error || "Create failed"); return; }
-    setNewEmail(""); setNewPassword(""); setNewQuotaMB("200"); setNewQuotaUnlimited(false);
+    setNewEmail(""); setNewPassword(""); setNewQuotaMB("200"); setNewQuotaUnlimited(false); setNewUserDept(null);
     setMsg(`Created ${j.email}`);
     void load();
   };
@@ -207,6 +237,100 @@ export default function AdminPage() {
     const j = await res.json().catch(() => ({})) as any;
     if (!res.ok) { setMsg(j.error || "Reject failed"); return; }
     setMsg(`Rejected ${u.email}`);
+    void load();
+  };
+
+  const setUserDepartment = async (u: AdminUser, dept: DepartmentOption | null) => {
+    await updatePerm(u, { departmentId: dept?.id ?? null } as any);
+  };
+
+  const openEditUser = (u: AdminUser) => {
+    setEditingUser(u);
+    setEditName(u.name ?? "");
+    setEditIc(u.icNumber ?? "");
+    setEditProfile(u.profile ?? "");
+    setEditDept(u.department ? { id: u.departmentId ?? u.department, name: u.department } : null);
+  };
+
+  const saveEditUser = async () => {
+    if (!editingUser) return;
+    if (!editName.trim()) { setMsg("Name required"); return; }
+    setEditSaving(true);
+    try {
+      const res = await fetch("/wdrive/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: editingUser.id,
+          name: editName.trim(),
+          icNumber: editIc.trim() || null,
+          profile: editProfile.trim() || null,
+          departmentId: editDept?.id ?? null,
+        }),
+      });
+      const j = await res.json().catch(() => ({})) as any;
+      if (!res.ok) { setMsg(j.error || "Save failed"); return; }
+      setEditingUser(null);
+      setMsg(`Profile updated for ${editingUser.email}`);
+      void load();
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const addDepartment = async () => {
+    setMsg(null);
+    if (!newDept.trim()) { setMsg("Department name required"); return; }
+    const res = await fetch("/wdrive/api/admin/departments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newDept }),
+    });
+    const j = await res.json().catch(() => ({})) as any;
+    if (!res.ok) { setMsg(j.error || "Add department failed"); return; }
+    setNewDept("");
+    setMsg(`Department ${j.name} added`);
+    void load();
+  };
+
+  const renameDepartment = async (d: DepartmentRow) => {
+    const n = (deptRename[d.id] ?? "").trim();
+    if (!n) { setMsg("Name required"); return; }
+    const res = await fetch("/wdrive/api/admin/departments", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: d.id, name: n }),
+    });
+    const j = await res.json().catch(() => ({})) as any;
+    if (!res.ok) { setMsg(j.error || "Rename failed"); return; }
+    setDeptRename(prev => { const n2 = { ...prev }; delete n2[d.id]; return n2; });
+    setMsg(`Renamed to ${j.name} — all members updated`);
+    void load();
+  };
+
+  const toggleDepartment = async (d: DepartmentRow) => {
+    const res = await fetch("/wdrive/api/admin/departments", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: d.id, isActive: !d.isActive }),
+    });
+    const j = await res.json().catch(() => ({})) as any;
+    if (!res.ok) { setMsg(j.error || "Update failed"); return; }
+    void load();
+  };
+
+  const removeDepartment = async (d: DepartmentRow) => {
+    const reassignTo = deptReassign[d.id] || "";
+    if (d.memberCount > 0 && !reassignTo) {
+      setMsg(`${d.name} has ${d.memberCount} member(s). Pick a reassignment target first, or reassign users manually.`);
+      return;
+    }
+    if (!confirm(d.memberCount > 0 ? `Delete ${d.name} and move ${d.memberCount} member(s)?` : `Delete ${d.name}?`)) return;
+    const q = reassignTo ? `?id=${encodeURIComponent(d.id)}&reassignTo=${encodeURIComponent(reassignTo)}` : `?id=${encodeURIComponent(d.id)}`;
+    const res = await fetch(`/wdrive/api/admin/departments${q}`, { method: "DELETE" });
+    const j = await res.json().catch(() => ({})) as any;
+    if (!res.ok) { setMsg(j.error || "Delete failed"); return; }
+    setMsg(`Department ${d.name} removed`);
     void load();
   };
 
@@ -284,6 +408,7 @@ export default function AdminPage() {
       { key: "overview", label: "Overview", icon: <MdDashboard className="tablet:h-5 tablet:w-5 h-6 w-6" /> },
       { key: "pending", label: "Pending", icon: <MdPendingActions className="tablet:h-5 tablet:w-5 h-6 w-6" />, badge: pending.length },
       { key: "users", label: "Users", icon: <MdPeople className="tablet:h-5 tablet:w-5 h-6 w-6" /> },
+      { key: "departments", label: "Departments", icon: <MdBusiness className="tablet:h-5 tablet:w-5 h-6 w-6" /> },
       { key: "domains", label: "Domains", icon: <MdDomain className="tablet:h-5 tablet:w-5 h-6 w-6" /> },
     ] as { key: Section; label: string; icon: ReactNode; badge?: number }[]
   );
@@ -377,6 +502,7 @@ export default function AdminPage() {
                       <td className="px-4 py-3">
                         <div className="flex gap-1">
                           <button onClick={()=>approvePending(u)} className="rounded-full bg-green-600 px-3 py-1 text-xs text-white hover:bg-green-700">Approve</button>
+                          <button onClick={()=>openEditUser(u)} className="rounded-full bg-[#e8f0fe] px-3 py-1 text-xs text-[#1a73e8] hover:bg-[#d2e3fc]">Edit</button>
                           <button onClick={()=>rejectPending(u)} className="rounded-full bg-red-50 px-3 py-1 text-xs text-red-600 hover:bg-red-100">Reject</button>
                         </div>
                       </td>
@@ -426,6 +552,10 @@ export default function AdminPage() {
               <label className="text-xs text-gray-500">Password (≥4)</label>
               <input value={newPassword} onChange={e=>setNewPassword(e.target.value)} type="password" placeholder="••••" className="w-full rounded border px-3 py-2 text-sm outline-none focus:border-[#1a73e8]" />
             </div>
+            <div className="min-w-[220px] flex-1">
+              <label className="text-xs text-gray-500">Department (type to search)</label>
+              <DepartmentCombobox value={newUserDept} onChange={setNewUserDept} options={deptOptionsActive} placeholder="Type to search…" allowClear />
+            </div>
             <div>
               <label className="text-xs text-gray-500">Role</label>
               <select value={newRole} onChange={e=>setNewRole(e.target.value)} className="w-full rounded border px-3 py-2 text-sm">
@@ -454,10 +584,9 @@ export default function AdminPage() {
 
         <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center">
           <input value={userQuery} onChange={e=>setUserQuery(e.target.value)} placeholder="Search name, email, department…" className="max-w-sm flex-1 rounded border px-3 py-2 text-sm outline-none focus:border-[#1a73e8]" />
-          <select value={deptFilter} onChange={e=>setDeptFilter(e.target.value)} className="rounded border px-3 py-2 text-sm">
-            <option value="all">All departments</option>
-            {deptOptions.map(d => <option key={d} value={d}>{d}</option>)}
-          </select>
+          <div className="min-w-[240px]">
+            <DepartmentCombobox value={deptFilter} onChange={setDeptFilter} options={deptOptions} placeholder="All departments — type to filter…" allowClear />
+          </div>
           <span className="text-xs text-gray-500">{visibleUsers.length} of {users.length}</span>
         </div>
 
@@ -485,7 +614,16 @@ export default function AdminPage() {
                     <div className="font-medium">{u.email}</div>
                     <div className="text-xs text-gray-500">{u.name} • {u.id.slice(0,6)}</div>
                   </td>
-                  <td className="px-4 py-3 text-xs">{u.department || "—"}</td>
+                  <td className="px-4 py-3 text-xs min-w-[200px]">
+                    <DepartmentCombobox
+                      value={u.department ? { id: u.departmentId ?? u.department, name: u.department } : null}
+                      onChange={d => setUserDepartment(u, d)}
+                      options={deptOptions}
+                      compact
+                      allowClear
+                      placeholder="Type to search…"
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <select value={u.role} onChange={e=>updatePerm(u,{role:e.target.value} as any)} className="rounded border px-2 py-1 text-xs" disabled={u.id===session?.user.id}>
                       <option value="USER">USER</option>
@@ -516,6 +654,7 @@ export default function AdminPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
+                      <button onClick={()=>openEditUser(u)} className="rounded-full bg-[#e8f0fe] px-3 py-1 text-xs text-[#1a73e8] hover:bg-[#d2e3fc]">Edit profile</button>
                       <button onClick={()=>resetPw(u)} className="rounded-full bg-gray-100 px-3 py-1 text-xs hover:bg-gray-200">Reset pw</button>
                       <button onClick={()=>removeUser(u)} className="rounded-full bg-red-50 px-3 py-1 text-xs text-red-600 hover:bg-red-100" disabled={u.id===session?.user.id}>Delete</button>
                     </div>
@@ -528,12 +667,100 @@ export default function AdminPage() {
         </>
         )}
 
+        {section === "departments" && (
+        <div className="mb-6 rounded-xl bg-white p-4 shadow-sm">
+          <h2 className="mb-1 text-sm font-semibold text-textC">Departments & Units ({departments.length})</h2>
+          <p className="mb-3 text-xs text-gray-500">Type to search in every department input. Rename updates all members automatically. Deactivating hides it from registration. Deleting requires reassigning members first.</p>
+          <div className="mb-4 flex gap-2">
+            <input value={newDept} onChange={e=>setNewDept(e.target.value)} onKeyDown={e=>e.key==="Enter" && addDepartment()} placeholder="New department / unit name…" className="max-w-sm flex-1 rounded border px-3 py-2 text-sm outline-none focus:border-[#1a73e8]" />
+            <button onClick={addDepartment} className="rounded-full bg-[#1a73e8] px-5 text-sm font-medium text-white hover:bg-[#1765cc]">Add</button>
+          </div>
+          {departments.length===0 ? (
+            <p className="py-6 text-center text-sm text-gray-400">{loading ? "Loading…" : "No departments yet"}</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b bg-gray-50 text-xs text-gray-500">
+                  <tr>
+                    <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">Members</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Rename</th>
+                    <th className="px-4 py-3">Delete / Reassign</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {departments.map(d => (
+                    <tr key={d.id} className="border-b last:border-0 hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium">{d.name}</td>
+                      <td className="px-4 py-3 text-xs">{d.memberCount}</td>
+                      <td className="px-4 py-3">
+                        <button onClick={()=>toggleDepartment(d)} className={`rounded-full px-3 py-1 text-xs ${d.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{d.isActive ? "Active" : "Inactive"}</button>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          <input value={deptRename[d.id] ?? d.name} onChange={e=>setDeptRename(prev=>({...prev,[d.id]:e.target.value}))} className="w-48 rounded border px-2 py-1 text-xs" />
+                          <button onClick={()=>renameDepartment(d)} className="rounded bg-gray-100 px-2 py-1 text-xs hover:bg-gray-200">Save</button>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          {d.memberCount > 0 && (
+                            <select value={deptReassign[d.id] ?? ""} onChange={e=>setDeptReassign(prev=>({...prev,[d.id]:e.target.value}))} className="max-w-[200px] rounded border px-2 py-1 text-xs" title="Reassign members to…">
+                              <option value="">Reassign to…</option>
+                              {departments.filter(x => x.id !== d.id).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+                            </select>
+                          )}
+                          <button onClick={()=>removeDepartment(d)} className="rounded-full bg-red-50 px-3 py-1 text-xs text-red-600 hover:bg-red-100">Delete</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        )}
+
                 <p className="mt-4 text-xs text-gray-400">Full admin = demo@local.dev + ADMIN role. New registrations stay pending until approved. Disabled users cannot login. Hard delete removes user + files permanently (CASCADE); soft disable keeps data.</p>
               </div>
             </div>
           </div>
         </div>
       </section>
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={e => { if (e.target === e.currentTarget) setEditingUser(null); }}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <h2 className="mb-1 text-base font-semibold text-textC">Edit profile</h2>
+            <p className="mb-4 text-xs text-gray-500">{editingUser.email}</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-500">Full name *</label>
+                <input value={editName} onChange={e=>setEditName(e.target.value)} className="w-full rounded border px-3 py-2 text-sm outline-none focus:border-[#1a73e8]" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">IC number</label>
+                <input value={editIc} onChange={e=>setEditIc(e.target.value)} placeholder="—" className="w-full rounded border px-3 py-2 text-sm outline-none focus:border-[#1a73e8]" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Department (type to search)</label>
+                <DepartmentCombobox value={editDept} onChange={setEditDept} options={deptOptions} placeholder="Type to search…" allowClear />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Profile / job title</label>
+                <textarea value={editProfile} onChange={e=>setEditProfile(e.target.value)} placeholder="—" rows={3} className="w-full rounded border px-3 py-2 text-sm outline-none focus:border-[#1a73e8]" />
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={()=>setEditingUser(null)} className="rounded-full px-4 py-2 text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
+              <button onClick={saveEditUser} disabled={editSaving} className="rounded-full bg-[#1a73e8] px-6 py-2 text-sm font-medium text-white hover:bg-[#1765cc] disabled:opacity-50">
+                {editSaving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

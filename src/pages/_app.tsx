@@ -3,6 +3,7 @@ import { SessionProvider, signIn, useSession } from "next-auth/react";
 import { type AppType } from "next/app";
 import { type ReactNode, useEffect } from "react";
 import { useRouter } from "next/router";
+import Head from "next/head";
 import "@/styles/globals.css";
 import Header from "@/components/headerComponents/Header";
 import SideMenu from "@/components/SideMenu";
@@ -74,6 +75,15 @@ const MyApp: AppType<{ session: Session | null }> = ({
   if (isAdminRoute || isProfileRoute) {
     return (
       <SessionProvider session={session} basePath="/wdrive/api/auth">
+        <Head>
+          <title>My Drive - WDrive Intranet</title>
+          <link rel="icon" href="/wdrive/favicon.ico" sizes="any" />
+          <link rel="icon" type="image/png" sizes="32x32" href="/wdrive/favicon-32x32.png" />
+          <link rel="icon" type="image/png" sizes="16x16" href="/wdrive/favicon-16x16.png" />
+          <link rel="apple-touch-icon" href="/wdrive/apple-touch-icon.png" />
+          <link rel="manifest" href="/wdrive/site.webmanifest" />
+          <meta name="theme-color" content="#ffffff" />
+        </Head>
         <AuthGate>
           <Component {...pageProps} />
         </AuthGate>
@@ -85,6 +95,15 @@ const MyApp: AppType<{ session: Session | null }> = ({
   if (isPublic) {
     return (
       <SessionProvider session={session} basePath="/wdrive/api/auth">
+        <Head>
+          <title>My Drive - WDrive Intranet</title>
+          <link rel="icon" href="/wdrive/favicon.ico" sizes="any" />
+          <link rel="icon" type="image/png" sizes="32x32" href="/wdrive/favicon-32x32.png" />
+          <link rel="icon" type="image/png" sizes="16x16" href="/wdrive/favicon-16x16.png" />
+          <link rel="apple-touch-icon" href="/wdrive/apple-touch-icon.png" />
+          <link rel="manifest" href="/wdrive/site.webmanifest" />
+          <meta name="theme-color" content="#ffffff" />
+        </Head>
         <Component {...pageProps} />
       </SessionProvider>
     );
@@ -93,6 +112,15 @@ const MyApp: AppType<{ session: Session | null }> = ({
   // Protected app
   return (
     <SessionProvider session={session} basePath="/wdrive/api/auth">
+      <Head>
+        <title>My Drive - WDrive Intranet</title>
+        <link rel="icon" href="/wdrive/favicon.ico" sizes="any" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/wdrive/favicon-32x32.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/wdrive/favicon-16x16.png" />
+        <link rel="apple-touch-icon" href="/wdrive/apple-touch-icon.png" />
+        <link rel="manifest" href="/wdrive/site.webmanifest" />
+        <meta name="theme-color" content="#ffffff" />
+      </Head>
       <AuthGate>
         <main className="flex h-screen flex-col overflow-hidden bg-bgc">
           <Header />

@@ -54,11 +54,14 @@ export default async function handler(
   const entry = await db.fileEntry.findFirst({ where: { id } });
   if (!entry) return res.status(404).json({ error: "Item not found." });
   const isSharedEntry = (entry as any).sharedDrive === true;
+  const body = req.body as Record<string, unknown>;
+  const action = readString(body.action, 30);
+  const isMoveToShared = action === "moveToShared";
   if (isSharedEntry) {
     // Shared Drive: viewable by all, mutable by admin only.
     if (!isPrivileged)
       return res.status(403).json({ error: "Only admin can modify shared Drive" });
-  } else if (entry.ownerId !== ownerId) {
+  } else if (entry.ownerId !== ownerId && !(isPrivileged && isMoveToShared)) {
     return res.status(404).json({ error: "Item not found." });
   }
   // scope for descendants / delete: shared entries use sharedDrive scope
@@ -119,9 +122,36 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const body = req.body as Record<string, unknown>;
-  const action = readString(body.action, 30);
   try {
+    if (action === "moveToShared") {
+      // Admin-only: transfer a My Drive file/folder (whole subtree) into
+      // shared Drive. Only admin can move My Drive items to Drive.
+      if (!isPrivileged)
+        return res.status(403).json({ error: "Only admin can move items to shared Drive" });
+      if (isSharedEntry)
+        return res.status(400).json({ error: "Item is already in shared Drive." });
+      const destinationId = readString(body.destinationId, 191);
+      if (!(await destinationIsValid(ownerId, destinationId, true))) {
+        return res.status(400).json({ error: "Destination folder not found." });
+      }
+      // descendants live in the item owner's scope (admin may move other users' items)
+      const ownerEntries = await db.fileEntry.findMany({
+        where: { ownerId: entry.ownerId } as any,
+      });
+      const subtreeIds = entry.isFolder
+        ? [id, ...collectDescendantIds(id, ownerEntries)]
+        : [id];
+      await db.fileEntry.updateMany({
+        where: { id: { in: subtreeIds } } as any,
+        data: { sharedDrive: true, isTrashed: false } as any,
+      });
+      const updated = await db.fileEntry.update({
+        where: { id },
+        data: { folderId: destinationId, isTrashed: false },
+      });
+      return res.status(200).json(serializeFileEntry(updated));
+    }
+
     if (action === "rename") {
       if (!canRename) return res.status(403).json({ error: "Rename permission denied" });
       const name = readString(body.name, 255);

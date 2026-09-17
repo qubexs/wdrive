@@ -118,7 +118,7 @@ export default function SharedFolder() {
       <Head>
         <title>{`${headerName} - Shared Drive`}</title>
         <meta name="description" content="Shared Drive folder" />
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/wdrive/favicon.ico" />
       </Head>
       <div>
         <FileHeader
