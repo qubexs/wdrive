@@ -16,6 +16,13 @@ import { USER_STORAGE_LIMIT_BYTES } from "@/constants/storage";
 /** Absolute login lifetime: 24h from last successful sign-in. */
 export const SESSION_MAX_AGE_SECONDS = 24 * 60 * 60;
 
+/** Fail-open helper: never let a slow DB block /api/auth/session. */
+const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T | null> =>
+  Promise.race([
+    promise.then((v) => v as T | null),
+    new Promise<T | null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
+
 /**
  * Module augmentation for `next-auth` types. Allows us to add custom properties to the `session`
  * object and keep type safety.
@@ -24,6 +31,7 @@ export const SESSION_MAX_AGE_SECONDS = 24 * 60 * 60;
  */
 declare module "next-auth" {
   interface Session extends DefaultSession {
+    error?: string;
     user: DefaultSession["user"] & {
       id: string;
       role: string;
@@ -55,6 +63,7 @@ declare module "next-auth" {
 }
 declare module "next-auth/jwt" {
   interface JWT {
+    error?: string;
     role?: string;
     canDownload?: boolean;
     canEdit?: boolean;
@@ -82,11 +91,15 @@ declare module "next-auth/jwt" {
 export const authOptions: NextAuthOptions = {
   callbacks: {
     session: ({ session, user, token }) => {
+      // Propagate JWT errors (e.g. absolute 24h expiry) so the client
+      // AuthGate can sign out instead of hanging on "loading".
+      const tokenError = (token as any)?.error as string | undefined;
       // JWT (credentials) flow uses token, DB flow uses user
       const userId = user?.id ?? (token?.sub as string | undefined);
       if (userId) {
         return {
           ...session,
+          ...(tokenError ? { error: tokenError } : {}),
           user: {
             ...session.user,
             id: userId,
@@ -106,12 +119,14 @@ export const authOptions: NextAuthOptions = {
           },
         };
       }
+      if (tokenError) return { ...session, error: tokenError };
       return session;
     },
     jwt: async ({ token, user }) => {
       const nowSec = Math.floor(Date.now() / 1000);
       if (user) {
         token.sub = user.id;
+        (token as any).error = undefined;
         (token as any).role = (user as any).role;
         (token as any).canDownload = (user as any).canDownload;
         (token as any).canEdit = (user as any).canEdit;
@@ -129,6 +144,12 @@ export const authOptions: NextAuthOptions = {
         return token;
       }
       if (token?.sub) {
+        // Short-circuit already-expired tokens: never return null here.
+        // Returning null crashes next-auth/jose with
+        // "JWT Claims Set MUST be an object", which makes
+        // /api/auth/session fail and leaves useSession() stuck on
+        // "loading" forever. Instead flag the error and let AuthGate sign out.
+        if ((token as any).error === "SessionExpired") return token;
         // Absolute 24h lifetime from last sign-in (covers idle + active).
         // Old tokens issued before loginAt existed fall back to iat.
         const loginAt =
@@ -138,16 +159,19 @@ export const authOptions: NextAuthOptions = {
         // backfill so subsequent checks have an explicit value
         (token as any).loginAt = loginAt;
         if (nowSec - loginAt > SESSION_MAX_AGE_SECONDS) {
-          // Returning null forces NextAuth to treat the session as expired
-          // and the client AuthGate redirects to sign-in.
-          return null as unknown as typeof token;
+          return { ...token, error: "SessionExpired" };
         }
-        // refresh perms from DB so admin changes apply without re-login
+        // refresh perms from DB so admin changes apply without re-login.
+        // Fail-open with 4s timeout: a slow DB must not hang
+        // /api/auth/session (the old "Redirecting to login..." hang).
         try {
-          const dbUser = await db.user.findUnique({
-            where: { id: token.sub as string },
-            select: { role: true, canDownload: true, canEdit: true, canDelete: true, canUpload: true, canRename: true, canMove: true, canCopy: true, canShare: true, isActive: true, email: true, storageLimitBytes: true, image: true },
-          });
+          const dbUser = await withTimeout(
+            db.user.findUnique({
+              where: { id: token.sub as string },
+              select: { role: true, canDownload: true, canEdit: true, canDelete: true, canUpload: true, canRename: true, canMove: true, canCopy: true, canShare: true, isActive: true, email: true, storageLimitBytes: true, image: true },
+            }),
+            4000,
+          );
           if (dbUser) {
             const adminEmails = (env.ADMIN_EMAILS ?? "")
               .split(",")

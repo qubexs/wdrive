@@ -6,7 +6,7 @@ import { useRouter } from "next/router";
 import { MdApps } from "react-icons/md";
 import { AiOutlineClose, AiOutlinePlus } from "react-icons/ai";
 import { DiGoogleDrive } from "react-icons/di";
-import { MdStarBorder, MdAdminPanelSettings, MdHelpOutline } from "react-icons/md";
+import { MdStarBorder, MdAdminPanelSettings, MdHelpOutline, MdSlideshow } from "react-icons/md";
 import { useSession } from "next-auth/react";
 
 type CustomApp = {
@@ -149,6 +149,16 @@ export default function AppLauncher({
               <MdStarBorder className="h-8 w-8" />
               <span>Starred</span>
             </Link>
+            <a
+              href="/present"
+              target="_blank"
+              rel="noreferrer"
+              className={tileCls}
+              title="AI Presentations (uses your WDrive login)"
+            >
+              <MdSlideshow className="h-8 w-8" />
+              <span>Slides</span>
+            </a>
             <Link href="/help" onClick={onClose} className={tileCls}>
               <MdHelpOutline className="h-8 w-8" />
               <span>Help</span>
@@ -166,9 +176,14 @@ export default function AppLauncher({
                   className={tileCls}
                   title="EDR console (admin, via wdrive session)"
                 >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1a73e8] text-sm font-bold text-white">
-                    E
-                  </span>
+                  <Image
+                    src={`${router.basePath}/edr.png`}
+                    width={32}
+                    height={32}
+                    alt="EDR"
+                    className="h-8 w-8 rounded-md object-contain"
+                    draggable={false}
+                  />
                   <span>EDR</span>
                 </a>
               </>
